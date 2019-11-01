@@ -1,6 +1,6 @@
 '''
 Created on August 19, 2019
-@author: Evariste
+@author: Evariste2
 '''
 
 from yubihsm import YubiHsm
@@ -8,34 +8,47 @@ from yubihsm.defs import CAPABILITY, ALGORITHM
 from yubihsm.objects import AsymmetricKey
 
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import hashes       #for signing
-from cryptography.hazmat.primitives.asymmetric import utils     #for hashing larger message
-from cryptography.hazmat.primitives.asymmetric import padding, ec   #for signing
-import base64
-import os
-from os import urandom
-from random import randrange
-from hashlib import sha256
+from cryptography.hazmat.primitives.asymmetric import padding, ec, rsa   #for signing
 
-from RNG1 import RNGOne
-from RNG2 import RNGTwo
+#from RNG1 import RNGOne
+#from RNG2 import RNGTwo
+from RNGs import RNGSources
+from getpass import getpass
+objectRNGs = RNGSources()
 
-#Open session, authenticate, create asymmetric key and public key
+#Open session, authenticate, asymmetric key and public key
 #Generate a random number from the HSM
-def authenticate():
+def openSession():
+    #pwd = getpass('Enter password for authentication:')
     hsm = YubiHsm.connect('http://localhost:12345')
-    session = hsm.create_session_derived(1, "password")
-    asymkey = AsymmetricKey.generate(session, 0, 'Generate BP R1 Sign', 0xffff, CAPABILITY.SIGN_ECDSA,
-                                     ALGORITHM.EC_BP512)
+    session = hsm.create_session_derived(1, 'password')
+    return session
+
+def authenticate(session):
+    #Elliptic curve crypto api type
+    #asymkey = AsymmetricKey.generate(session, 0, 'Generate BP R1 Sign', 0xffff, CAPABILITY.SIGN_ECDSA,
+                                     #ALGORITHM.EC_BP512)
+    #RSA
+    keysize = 2048
+    key = rsa.generate_private_key(public_exponent=0x10001, key_size=keysize, backend=default_backend())
+    asymkey = AsymmetricKey.put(session, 0, 'RSA pkcs1v15', 0xffff, CAPABILITY.SIGN_PKCS, key)
+    #End RSA
+    #print(asymkey)
+
     pub = asymkey.get_public_key()
-    data = session.get_pseudo_random(16)
-    data = os.urandom(64)
+    data = session.get_pseudo_random(64)
+    #data = os.urandom(16)
     hashtype = hashes.SHA512()
-    resp = asymkey.sign_ecdsa(data, hashtype, length=0)
+    #resp = asymkey.sign_ecdsa(data, hashtype, length=0)     #Sign using ecdsa
+    resp = asymkey.sign_pkcs1v1_5(data, hashtype)           #Sign using pkcs1v1_5
     bits512 = int.from_bytes(resp, byteorder='little')
-    return session, asymkey, pub, bits512
+    #print(resp)
+    #pub.verify(resp, data, ec.ECDSA(hashtype))                 #verify using ec.ECDSA
+    pub.verify(resp, data, padding.PKCS1v15(), hashtype)        #verify using pkcs1v1_5
+    #asymkey.delete()
+    #return session, asymkey, pub, bits512
+    return asymkey, pub, bits512
 
 #Signing one message
 def SimpleSigning(priv_key, message):
@@ -50,12 +63,14 @@ def ComplexSigning(message1, message2, messageHSM, priv_key):
     hasher.update(str(messageHSM).encode('utf8'))
     digest = hasher.finalize()
     #print(digest)
-    bits512 = int.from_bytes(digest, byteorder='little')
+    #bits512 = int.from_bytes(digest, byteorder='little')
     #print(format(bits512, 'b'))
-    sig_ecda = priv_key.sign_ecdsa(digest, chosen_hash, length=0)      #padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH)
-    #sig_pkcs1 = priv_key.sign_pkcs1v1_5(digest, hashes.SHA512)
-    return sig_ecda, bits512
-    # return sig_pkcs1, bits512
+
+    #sig_ecda = priv_key.sign_ecdsa(digest, chosen_hash, length=0)      #sign using Elliptic Curve ecdsa
+    sig_pkcs1 = priv_key.sign_pkcs1v1_5(digest, chosen_hash)            #sign using RSA pkcs1v1_5
+
+    #return sig_ecda, digest
+    return sig_pkcs1, digest
 
 #Verification
 def SimpleVerification(pub_key, signature, message):
@@ -67,39 +82,27 @@ def SimpleVerification(pub_key, signature, message):
     return authentication
 
 # Clean up and closing session
-def cleanUp(session, priv_key):
+def cleanUp(priv_key):
     # Delete the key from the YubiHSM 2
     priv_key.delete()
-    session.close()
-
-#verification
-def verifyHSMSource(pub, resp, data):
-    try:
-        pub.verify(resp, str(data).encode('utf8'), hashes.SHA256)
-    except Exception as e:
-        raise e
-    return True
 
 #Define a function main to process external RNGs, open session
-def main():
-    message1, pub_key1, signedMessage1 = RNGOne()  # Verify message authenticity
+def main(session):
+    message1, pub_key1, signedMessage1 =  objectRNGs.RNG()  #RNGOne()   Verify message authenticity
     authentication1 = SimpleVerification(pub_key1, signedMessage1, str(message1).encode('utf8'))
-    message2, pub_key2, signedMessage2 = RNGTwo()  # Verify message authenticity
+    message2, pub_key2, signedMessage2 =  objectRNGs.RNG()                  #RNGTwo()  # Verify message authenticity
     authentication2 = SimpleVerification(pub_key2, signedMessage2, str(message2).encode('utf8'))
     if authentication1 and authentication2:
-        session, priv_key, pub_key, messageHSM = authenticate()
-        combinedMsgSigned, bits512 = ComplexSigning(message1, message2, messageHSM, priv_key)
-        #print(combinedMsgSigned)
-        #print(bits512)
-        #print(len(str(bits512)))
-        #print(messageHSM)
-        #print(len(str(messageHSM)))
-        #print(verifyHSMSource(pub_key, combinedMsgSigned, bits512))
-        cleanUp(session, priv_key)
-        return bits512
+        priv_key, pub_key, messageHSM = authenticate(session)
+        combinedMsgSigned, digest = ComplexSigning(message1, message2, messageHSM, priv_key)
+        cleanUp(priv_key)
+        #print(int.from_bytes(digest, byteorder='big'))
+        return digest, combinedMsgSigned, pub_key
 
-#if __name__ == '__main__':
+if __name__ == '__main__':
     #main()
+    session = openSession()
+    authenticate(session)
     #objectRSA = RSAEncryptionFunctions()
     #A=objectRSA.main()
     #print(A)

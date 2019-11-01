@@ -9,55 +9,45 @@ to get random bits and so on. Right now we use simple functions to replicate
 some of this behavior.
 '''
 from cryptography.hazmat.primitives import hashes       #for signing
-from cryptography.hazmat.primitives.asymmetric import utils     #for hashing larger message
 from cryptography.hazmat.primitives.asymmetric import padding, ec   #for signing
 
 import zmq
-from random import randrange
-import time
 import sys
 import datetime
-#from test import RSAEncryptionFunctions
-from cryptoHeaven import main
-#from test2 import main
-
-#objectEncrypt = RSAEncryptionFunctions()
-
+from cryptoHeaven import main, openSession
+import convertion
 
 #Define function UTC time  ???In case of no internet connection, how utc gets updated?
 def utcTime():
     return datetime.datetime.utcnow()
 
-#verification
-def verifyHSMSource(pub, resp, data):
-    try:
-        pub.verify(resp, str(data).encode('utf8'), ec.ECDSA(hashes.SHA512))
-    except Exception as e:
-        raise e
-    return True
+# Retrieve  message from HSM and assemble with
+def assemble_message(session):
+    digest, messageSigned, pub = main(session)
+    hashtype = hashes.SHA512()
+    #pub.verify(messageSigned, digest, ec.ECDSA(hashtype))              # verify using ec.ECDSA
+    pub.verify(messageSigned, digest, padding.PKCS1v15(), hashtype)     #verify using pkcs1v15
+    randomMessage = int.from_bytes(digest, byteorder='big')
+    #randomMessage = convertion.convertIntFromBytes(digest)
 
-# mesage to reurn
-def assemble_message():
-    randomMessage = main()
-    print(randomMessage)
-    #randomMessage = objectEncrypt.main()
-    #randomMessage = objectEncrypt.Random256()
-    #randomMessage = main()
+    #print(randomMessage)
     timeUTC = utcTime()
-    message = str(randomMessage) + ',' + str(timeUTC)
+    message = str(randomMessage) + '*****' + str(digest) + '*****' + str(messageSigned) + '*****' + str(timeUTC)
     return(message)         #must be concatenated: signMessage, pub_key
 
 # This is the loop to run to process incoming requests
 def rng_handler(socket):
     # sleepTime = 10
+    session = openSession()
     while True:
         remoteRequest = socket.recv()
+        #print(remoteRequest.decode())
         # Magic word to terminate the handler.
         if remoteRequest.decode() == "END":
             print('Ending RNG on port', socket)
             break
 
-        msgToSend = assemble_message()
+        msgToSend = assemble_message(session)
         # Return the requested message
         socket.send_string("%s" % (msgToSend))
         # time.sleep(sleepTime)
