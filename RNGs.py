@@ -12,6 +12,7 @@ import os
 from os import urandom
 from random import randrange
 from hashlib import sha256
+import datetime
 
 class RNGSources:
 
@@ -42,5 +43,20 @@ class RNGSources:
         signedMessage = self.SimpleSigning(private_key, str(randomNumber).encode('utf8'))
         return randomNumber, public_key, signedMessage
 
+    def utcTime(self):
+        return datetime.datetime.utcnow()
+
+    # Convert to hour, day, month, year
+    def parseHourDayMonthYear(self):
+        date_time_str = self.utcTime()
+        #date_time_obj = datetime.strptime(date_time_str, '%Y-%m-%d %H:%M:%S.%f')
+        hour = date_time_str.hour
+        day = date_time_str.day
+        month = date_time_str.month
+        year = date_time_str.year
+        return date_time_str, hour, day, month, year
+
 if __name__ == '__main__':
     objectRNG = RNGSources()
+    #date_time_str, hour, day, month, year = objectRNG.parseHourDayMonthYear()
+    #print(date_time_str)

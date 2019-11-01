@@ -13,26 +13,26 @@ from cryptography.hazmat.primitives.asymmetric import padding, ec   #for signing
 
 import zmq
 import sys
-import datetime
+from datetime import datetime
 from cryptoHeaven import main, openSession
 import convertion
+#session = openSession()
 
 #Define function UTC time  ???In case of no internet connection, how utc gets updated?
 def utcTime():
-    return datetime.datetime.utcnow()
+    currentTime = datetime.utcnow()
+    timeFormat = datetime.strftime(currentTime, '%Y-%m-%d %H:%M:%S')
+    return timeFormat
 
 # Retrieve  message from HSM and assemble with
 def assemble_message(session):
+    #digest, messageSigned, pub = main(session)
     digest, messageSigned, pub = main(session)
     hashtype = hashes.SHA512()
-    #pub.verify(messageSigned, digest, ec.ECDSA(hashtype))              # verify using ec.ECDSA
-    pub.verify(messageSigned, digest, padding.PKCS1v15(), hashtype)     #verify using pkcs1v15
-    randomMessage = int.from_bytes(digest, byteorder='big')
-    #randomMessage = convertion.convertIntFromBytes(digest)
+    pub.verify(messageSigned, digest, ec.ECDSA(hashtype))              # verify using ec.ECDSA
+    #pub.verify(messageSigned, digest, padding.PKCS1v15(), hashtype)     #verify using pkcs1v15
 
-    #print(randomMessage)
-    timeUTC = utcTime()
-    message = str(randomMessage) + '*****' + str(digest) + '*****' + str(messageSigned) + '*****' + str(timeUTC)
+    message = str(messageSigned) +  '*****' + str(digest) + '*****' + str(utcTime())
     return(message)         #must be concatenated: signMessage, pub_key
 
 # This is the loop to run to process incoming requests
