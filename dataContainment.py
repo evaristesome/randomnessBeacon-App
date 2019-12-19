@@ -17,7 +17,11 @@ class data:
             # to be inserted later: sourceRNG1 text, sourceRNG2 text, sourceHSM text, sourcePaul text
             objectCursor.execute("""CREATE TABLE IF NOT EXISTS beaconsDB 
                                 (ID integer PRIMARY KEY AUTOINCREMENT, 
-                                currentTimeCur text,        
+                                currentTimeCur text,    
+                                sourceRNG1 text,
+                                sourceRNG2 text,
+                                sourceHSM text,
+                                sourcePaul text,
                                 outputValuePrev text, 
                                 beaconH text,
                                 beaconD text,
@@ -36,8 +40,8 @@ class data:
         try:
             objectCursor = con.cursor()
             objectCursor.execute(
-                '''INSERT INTO beaconsDB(currentTimeCur, outputValuePrev, beaconH, beaconD, beaconM, beaconY, outputValueCur, hashNext) VALUES(?,?,?,?,?,?,?,?)''', entities)
-            #to be inserted later: sourceRNG1, sourceRNG2, sourceHSM, sourcePaul
+                '''INSERT INTO beaconsDB(currentTimeCur, sourceRNG1, sourceRNG2, sourceHSM, sourcePaul, outputValuePrev, beaconH, beaconD, beaconM, beaconY, outputValueCur, hashNext) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)''', entities)
+            #to be inserted later: sourceRNG1, sourceRNG2, sourceHSM, sourcePaul,
             # entities contain the different field to be inserted
             con.commit()
         except Exception as e:
@@ -152,8 +156,8 @@ class data:
                         sourcePaulNext = queueS1.get()           #will add it to the dB lter
 
                         self.sqlTable()
-                        entities =(str(currentTimeCur), str(outputValuePrev), str(beaconH), str(beaconD), str(beaconM), str(beaconY), str(outputValueCur), str(hashNext))
-                        #entities = (str(currentTimeCur), str(sourceRNG1), str(sourceRNG2), str(sourceHSM), str(sourcePaul), str(outputValuePrev), str(beaconH), str(beaconD), str(beaconM),str(beaconY), str(outputValueCur), str(hashNext))
+                        #entities =(str(currentTimeCur), str(outputValuePrev), str(beaconH), str(beaconD), str(beaconM), str(beaconY), str(outputValueCur), str(hashNext))
+                        entities = (str(currentTimeCur), str(sourceRNG1), str(sourceRNG2), str(sourceHSM), str(sourcePaul), str(outputValuePrev), str(beaconH), str(beaconD), str(beaconM),str(beaconY), str(outputValueCur), str(hashNext))
                         self.insertBeaconsinfo(entities)
         except Exception as e:
             logging.error("Exception occured: ", exc_info=True)
